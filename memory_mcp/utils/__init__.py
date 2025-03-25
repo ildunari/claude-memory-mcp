@@ -1,3 +1,3 @@
 """
-Utility modules for the Memory MCP Server.
+Utility modules for the memory system.
 """
