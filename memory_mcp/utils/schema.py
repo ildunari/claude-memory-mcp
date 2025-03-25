@@ -1,36 +1,68 @@
 """
-Schemas and validation for memory data structures.
+Types and constants for memory data structures.
 """
 
-from enum import Enum
-from typing import Any, Dict, List, Optional, Union
-
-from pydantic import BaseModel, Field
-
-
 # Memory types
-class MemoryType(str, Enum):
-    CONVERSATION = "conversation"
-    FACT = "fact"
-    DOCUMENT = "document"
-    ENTITY = "entity"
-    REFLECTION = "reflection"
-    CODE = "code"
-
+MEMORY_TYPES = [
+    "conversation",
+    "fact",
+    "document",
+    "entity",
+    "reflection",
+    "code"
+]
 
 # Memory tiers
-class MemoryTier(str, Enum):
-    SHORT_TERM = "short_term"
-    LONG_TERM = "long_term"
-    ARCHIVED = "archived"
+MEMORY_TIERS = [
+    "short_term",
+    "long_term",
+    "archived"
+]
 
+# Required fields for each memory type
+MEMORY_TYPE_REQUIREMENTS = {
+    "conversation": ["role", "message"],
+    "fact": ["fact", "confidence"],
+    "document": ["title", "text"],
+    "entity": ["name", "entity_type"],
+    "reflection": ["subject", "reflection"],
+    "code": ["language", "code"]
+}
 
-# Basic memory schema
-class MemorySchema(BaseModel):
-    """Base schema for all memory types."""
-    id: str = Field(..., description="Memory ID")
-    type: str = Field(..., description="Memory type")
-    content: Dict[str, Any] = Field(..., description="Type-specific content")
-    embedding: Optional[List[float]] = Field(None, description="Embedding vector")
-    metadata: Dict[str, Any] = Field(..., description="Memory metadata")
-    context: Optional[Dict[str, Any]] = Field(None, description="Memory context")
+# Required metadata fields
+REQUIRED_METADATA = [
+    "created_at",
+    "last_accessed",
+    "importance_score"
+]
+
+# Common memory structure example
+"""
+{
+    "id": "mem_12345",
+    "type": "conversation",
+    "content": {
+        "role": "user",
+        "message": "Hello!",
+        "summary": "User greeting",
+        "entities": [],
+        "sentiment": "positive",
+        "intent": "greeting"
+    },
+    "embedding": [0.1, 0.2, 0.3, ...],
+    "metadata": {
+        "created_at": "2025-03-25T10:00:00Z",
+        "last_accessed": "2025-03-25T10:05:00Z",
+        "access_count": 1,
+        "importance_score": 0.5,
+        "source": "user",
+        "tags": ["greeting"]
+    },
+    "context": {
+        "session_id": "session_12345",
+        "related_memories": [],
+        "preceding_memories": [],
+        "following_memories": []
+    }
+}
+"""
