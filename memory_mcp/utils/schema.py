@@ -1,143 +1,135 @@
 """
-Schema validation utilities for the Memory MCP Server.
+Schemas and validation for memory data structures.
 """
 
+from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field, conlist, constr
+from pydantic import BaseModel, Field, field_validator, model_validator
 
+# Memory types
+class MemoryType(str, Enum):
+    CONVERSATION = "conversation"
+    FACT = "fact"
+    DOCUMENT = "document"
+    ENTITY = "entity"
+    REFLECTION = "reflection"
+    CODE = "code"
 
-class MemoryBase(BaseModel):
-    """Base model for memory entries."""
-    id: str
-    type: str
-    importance: float = Field(default=0.5, ge=0.0, le=1.0)
-    created_at: Optional[str] = None
-    last_accessed: Optional[str] = None
-    last_modified: Optional[str] = None
-    access_count: Optional[int] = Field(default=0, ge=0)
-    embedding: Optional[List[float]] = None
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-    context: Dict[str, Any] = Field(default_factory=dict)
+# Memory tiers
+class MemoryTier(str, Enum):
+    SHORT_TERM = "short_term"
+    LONG_TERM = "long_term"
+    ARCHIVED = "archived"
 
-
+# Conversation memory content
 class ConversationContent(BaseModel):
-    """Model for conversation memory content."""
-    role: Optional[str] = None
-    message: Optional[str] = None
-    messages: Optional[List[Dict[str, Any]]] = None
-    summary: Optional[str] = None
-    entities: Optional[List[str]] = None
-    sentiment: Optional[str] = None
-    intent: Optional[str] = None
+    role: str = Field(..., description="Role of the message sender (user, assistant, system)")
+    message: str = Field(..., description="Message content")
+    summary: Optional[str] = Field(None, description="Summary of the message")
+    entities: Optional[List[str]] = Field(None, description="Entities mentioned in the message")
+    sentiment: Optional[str] = Field(None, description="Sentiment of the message")
+    intent: Optional[str] = Field(None, description="Intent of the message")
 
-
+# Fact memory content
 class FactContent(BaseModel):
-    """Model for fact memory content."""
-    fact: str
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
-    domain: Optional[str] = None
-    entities: Optional[List[str]] = None
-    references: Optional[List[str]] = None
+    fact: str = Field(..., description="The factual statement")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence in the fact")
+    domain: Optional[str] = Field(None, description="Domain of the fact")
+    entities: Optional[List[str]] = Field(None, description="Entities mentioned in the fact")
+    references: Optional[List[str]] = Field(None, description="References for the fact")
 
-
+# Document memory content
 class DocumentContent(BaseModel):
-    """Model for document memory content."""
-    title: str
-    text: str
-    summary: Optional[str] = None
-    chunks: Optional[List[str]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    title: str = Field(..., description="Document title")
+    text: str = Field(..., description="Document text")
+    summary: Optional[str] = Field(None, description="Document summary")
+    chunks: Optional[List[str]] = Field(None, description="Document chunk IDs")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Document metadata")
 
-
+# Entity memory content
 class EntityContent(BaseModel):
-    """Model for entity memory content."""
-    name: str
-    entity_type: str
-    attributes: Dict[str, Any] = Field(default_factory=dict)
-    relationships: Optional[List[Dict[str, Any]]] = None
+    name: str = Field(..., description="Entity name")
+    entity_type: str = Field(..., description="Entity type")
+    attributes: Dict[str, Any] = Field(default_factory=dict, description="Entity attributes")
+    relationships: Optional[List[Dict[str, str]]] = Field(None, description="Entity relationships")
 
-
+# Reflection memory content
 class ReflectionContent(BaseModel):
-    """Model for reflection memory content."""
-    subject: str
-    reflection: str
-    insights: Optional[List[str]] = None
-    action_items: Optional[List[str]] = None
+    subject: str = Field(..., description="Reflection subject")
+    reflection: str = Field(..., description="Reflection content")
+    insights: Optional[List[str]] = Field(None, description="Insights from the reflection")
+    action_items: Optional[List[str]] = Field(None, description="Action items from the reflection")
 
-
+# Code memory content
 class CodeContent(BaseModel):
-    """Model for code memory content."""
-    language: str
-    code: str
-    description: Optional[str] = None
-    purpose: Optional[str] = None
-    dependencies: Optional[List[str]] = None
+    language: str = Field(..., description="Programming language")
+    code: str = Field(..., description="Code content")
+    description: Optional[str] = Field(None, description="Code description")
+    purpose: Optional[str] = Field(None, description="Code purpose")
+    dependencies: Optional[List[str]] = Field(None, description="Code dependencies")
 
+# Memory context
+class MemoryContext(BaseModel):
+    session_id: Optional[str] = Field(None, description="Session ID")
+    related_memories: Optional[List[str]] = Field(None, description="Related memory IDs")
+    preceding_memories: Optional[List[str]] = Field(None, description="Preceding memory IDs")
+    following_memories: Optional[List[str]] = Field(None, description="Following memory IDs")
+    source: Optional[str] = Field(None, description="Memory source")
+    emotional_valence: Optional[str] = Field(None, description="Emotional valence of the memory")
 
-class ConversationMemory(MemoryBase):
-    """Model for conversation memory entries."""
-    type: str = "conversation"
-    content: ConversationContent
+# Memory metadata
+class MemoryMetadata(BaseModel):
+    created_at: str = Field(..., description="Creation timestamp")
+    last_accessed: str = Field(..., description="Last access timestamp")
+    last_modified: Optional[str] = Field(None, description="Last modification timestamp")
+    access_count: int = Field(0, ge=0, description="Number of times the memory has been accessed")
+    importance_score: float = Field(0.5, ge=0.0, le=1.0, description="Memory importance score")
+    source: Optional[str] = Field(None, description="Memory source")
+    tags: Optional[List[str]] = Field(None, description="Memory tags")
 
+    @field_validator("created_at", "last_accessed", "last_modified")
+    @classmethod
+    def validate_timestamp(cls, v: Optional[str]) -> Optional[str]:
+        """Validate ISO format timestamps."""
+        if v is None:
+            return v
+        try:
+            datetime.fromisoformat(v)
+        except ValueError:
+            raise ValueError(f"Invalid ISO format timestamp: {v}")
+        return v
 
-class FactMemory(MemoryBase):
-    """Model for fact memory entries."""
-    type: str = "fact"
-    content: FactContent
-
-
-class DocumentMemory(MemoryBase):
-    """Model for document memory entries."""
-    type: str = "document"
-    content: DocumentContent
-
-
-class EntityMemory(MemoryBase):
-    """Model for entity memory entries."""
-    type: str = "entity"
-    content: EntityContent
-
-
-class ReflectionMemory(MemoryBase):
-    """Model for reflection memory entries."""
-    type: str = "reflection"
-    content: ReflectionContent
-
-
-class CodeMemory(MemoryBase):
-    """Model for code memory entries."""
-    type: str = "code"
-    content: CodeContent
-
-
-# Memory validators
-def validate_memory(memory: Dict[str, Any]) -> Union[MemoryBase, Dict[str, Any]]:
-    """
-    Validate a memory entry against the appropriate schema.
+# Memory model
+class Memory(BaseModel):
+    id: str = Field(..., description="Memory ID")
+    type: MemoryType = Field(..., description="Memory type")
+    content: Dict[str, Any] = Field(..., description="Type-specific content")
+    embedding: Optional[List[float]] = Field(None, description="Embedding vector")
+    metadata: MemoryMetadata = Field(..., description="Memory metadata")
+    context: Optional[MemoryContext] = Field(None, description="Memory context")
     
-    Args:
-        memory: Memory entry
+    @model_validator(mode="after")
+    def validate_content(self) -> "Memory":
+        """Validate that the content matches the memory type."""
+        memory_type = self.type
+        content = self.content
         
-    Returns:
-        Validated memory (Pydantic model or original dict)
-    """
-    memory_type = memory.get("type")
-    
-    try:
-        if memory_type == "conversation":
-            return ConversationMemory(**memory)
-        elif memory_type == "fact":
-            return FactMemory(**memory)
-        elif memory_type == "document":
-            return DocumentMemory(**memory)
-        elif memory_type == "entity":
-            return EntityMemory(**memory)
-        elif memory_type == "reflection":
-            return ReflectionMemory(**memory)
-        elif memory_type == "code":
-            return CodeMemory(**memory)
-        else:
-            return memory  # Return original if no matching schema
-    except Exception:
-        return memory  # Return original on validation error
+        try:
+            if memory_type == MemoryType.CONVERSATION:
+                ConversationContent(**content)
+            elif memory_type == MemoryType.FACT:
+                FactContent(**content)
+            elif memory_type == MemoryType.DOCUMENT:
+                DocumentContent(**content)
+            elif memory_type == MemoryType.ENTITY:
+                EntityContent(**content)
+            elif memory_type == MemoryType.REFLECTION:
+                ReflectionContent(**content)
+            elif memory_type == MemoryType.CODE:
+                CodeContent(**content)
+        except Exception as e:
+            raise ValueError(f"Invalid content for memory type {memory_type}: {e}")
+        
+        return self
