@@ -1,9 +1,9 @@
 """
-Utilities for generating and managing embeddings.
+Embedding utilities for the memory MCP server.
 """
 
 import os
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 from loguru import logger
@@ -12,64 +12,57 @@ from sentence_transformers import SentenceTransformer
 
 class EmbeddingManager:
     """
-    Manages the generation and caching of text embeddings.
+    Manages embedding generation and similarity calculations.
     
-    This class provides utilities for generating, storing, and retrieving
-    embeddings for text content. It uses the sentence-transformers library
-    for embedding generation and supports caching for improved performance.
+    This class handles the loading of embedding models, generation
+    of embeddings for text, and calculation of similarity between
+    embeddings.
     """
     
-    def __init__(
-        self,
-        model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
-        cache_dir: Optional[str] = None,
-        dimensions: int = 384
-    ) -> None:
+    def __init__(self, config: Dict[str, Any]) -> None:
         """
         Initialize the embedding manager.
         
         Args:
-            model_name: Name of the sentence transformer model
-            cache_dir: Directory for caching embeddings
-            dimensions: Embedding dimensions
+            config: Configuration dictionary
         """
-        self.model_name = model_name
-        self.dimensions = dimensions
-        self.cache_dir = cache_dir
+        self.config = config
+        self.model_name = config["embedding"].get("model", "sentence-transformers/all-MiniLM-L6-v2")
+        self.dimensions = config["embedding"].get("dimensions", 384)
+        self.cache_dir = config["embedding"].get("cache_dir", None)
+        
+        # Model will be loaded on first use
         self.model = None
-        
-        # Cache for embeddings
-        self.embedding_cache = {}
-        
-        logger.info(f"Initializing embedding manager with model {model_name}")
     
-    async def initialize(self) -> None:
-        """Initialize the embedding model."""
-        logger.info(f"Loading embedding model: {self.model_name}")
-        
-        # Create cache directory if specified
-        if self.cache_dir:
-            os.makedirs(self.cache_dir, exist_ok=True)
-        
-        # Load the model
-        self.model = SentenceTransformer(self.model_name)
-        
-        # Verify dimensions
-        sample_text = "Sample text for dimension verification"
-        sample_embedding = self.model.encode(sample_text)
-        actual_dimensions = len(sample_embedding)
-        
-        if actual_dimensions != self.dimensions:
-            logger.warning(
-                f"Model dimensions ({actual_dimensions}) don't match expected dimensions ({self.dimensions})"
-            )
-            self.dimensions = actual_dimensions
-        
-        logger.info(f"Embedding model loaded with dimensions: {self.dimensions}")
-    
-    async def get_embedding(self, text: str) -> List[float]:
+    def get_model(self) -> SentenceTransformer:
         """
-        Get embedding for text, using cache if available.
+        Get or load the embedding model.
+        
+        Returns:
+            SentenceTransformer model
+        """
+        if self.model is None:
+            # Create cache directory if specified
+            if self.cache_dir:
+                os.makedirs(self.cache_dir, exist_ok=True)
+                
+            # Load model
+            logger.info(f"Loading embedding model: {self.model_name}")
+            try:
+                self.model = SentenceTransformer(
+                    self.model_name,
+                    cache_folder=self.cache_dir
+                )
+                logger.info(f"Embedding model loaded: {self.model_name}")
+            except Exception as e:
+                logger.error(f"Error loading embedding model: {str(e)}")
+                raise RuntimeError(f"Failed to load embedding model: {str(e)}")
+        
+        return self.model
+    
+    def generate_embedding(self, text: str) -> List[float]:
+        """
+        Generate an embedding vector for text.
         
         Args:
             text: Text to embed
@@ -77,27 +70,22 @@ class EmbeddingManager:
         Returns:
             Embedding vector as a list of floats
         """
-        if not self.model:
-            await self.initialize()
-        
-        # Check cache
-        if text in self.embedding_cache:
-            return self.embedding_cache[text]
+        model = self.get_model()
         
         # Generate embedding
-        embedding = self.model.encode(text)
-        
-        # Convert to list of floats for JSON serialization
-        embedding_list = embedding.tolist()
-        
-        # Cache the embedding
-        self.embedding_cache[text] = embedding_list
-        
-        return embedding_list
+        try:
+            embedding = model.encode(text)
+            
+            # Convert to list of floats for JSON serialization
+            return embedding.tolist()
+        except Exception as e:
+            logger.error(f"Error generating embedding: {str(e)}")
+            # Return zero vector as fallback
+            return [0.0] * self.dimensions
     
-    async def get_embeddings(self, texts: List[str]) -> List[List[float]]:
+    def batch_generate_embeddings(self, texts: List[str]) -> List[List[float]]:
         """
-        Get embeddings for multiple texts, using batch processing.
+        Generate embeddings for multiple texts.
         
         Args:
             texts: List of texts to embed
@@ -105,47 +93,24 @@ class EmbeddingManager:
         Returns:
             List of embedding vectors
         """
-        if not self.model:
-            await self.initialize()
+        model = self.get_model()
         
-        # Filter out texts that are not in cache
-        texts_to_embed = []
-        cached_indices = {}
-        
-        for i, text in enumerate(texts):
-            if text in self.embedding_cache:
-                cached_indices[i] = text
-            else:
-                texts_to_embed.append(text)
-        
-        # Generate embeddings for new texts
-        if texts_to_embed:
-            new_embeddings = self.model.encode(texts_to_embed)
+        # Generate embeddings in batch
+        try:
+            embeddings = model.encode(texts)
             
-            # Update cache with new embeddings
-            for i, text in enumerate(texts_to_embed):
-                embedding_list = new_embeddings[i].tolist()
-                self.embedding_cache[text] = embedding_list
-        
-        # Combine cached and new embeddings
-        result = []
-        cached_count = 0
-        new_count = 0
-        
-        for i in range(len(texts)):
-            if i in cached_indices:
-                # Use cached embedding
-                result.append(self.embedding_cache[cached_indices[i]])
-                cached_count += 1
-            else:
-                # Use new embedding
-                text = texts[i - cached_count]
-                result.append(self.embedding_cache[text])
-                new_count += 1
-        
-        return result
+            # Convert to list of lists for JSON serialization
+            return [embedding.tolist() for embedding in embeddings]
+        except Exception as e:
+            logger.error(f"Error generating batch embeddings: {str(e)}")
+            # Return zero vectors as fallback
+            return [[0.0] * self.dimensions] * len(texts)
     
-    def cosine_similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
+    def calculate_similarity(
+        self,
+        embedding1: Union[List[float], np.ndarray],
+        embedding2: Union[List[float], np.ndarray]
+    ) -> float:
         """
         Calculate cosine similarity between two embeddings.
         
@@ -156,56 +121,63 @@ class EmbeddingManager:
         Returns:
             Cosine similarity (0.0-1.0)
         """
-        # Convert to numpy arrays
-        vec1 = np.array(embedding1)
-        vec2 = np.array(embedding2)
+        # Convert to numpy arrays if needed
+        if isinstance(embedding1, list):
+            embedding1 = np.array(embedding1)
+        if isinstance(embedding2, list):
+            embedding2 = np.array(embedding2)
         
         # Calculate cosine similarity
-        norm1 = np.linalg.norm(vec1)
-        norm2 = np.linalg.norm(vec2)
+        norm1 = np.linalg.norm(embedding1)
+        norm2 = np.linalg.norm(embedding2)
         
         if norm1 == 0 or norm2 == 0:
             return 0.0
         
-        return float(np.dot(vec1, vec2) / (norm1 * norm2))
+        return float(np.dot(embedding1, embedding2) / (norm1 * norm2))
     
     def find_most_similar(
         self,
-        query_embedding: List[float],
-        candidate_embeddings: Dict[str, List[float]],
-        top_k: int = 5,
-        threshold: float = 0.0
-    ) -> List[Dict[str, Union[str, float]]]:
+        query_embedding: Union[List[float], np.ndarray],
+        embeddings: List[Union[List[float], np.ndarray]],
+        min_similarity: float = 0.0,
+        limit: int = 5
+    ) -> List[Dict[str, Union[int, float]]]:
         """
-        Find the most similar embeddings to a query embedding.
+        Find most similar embeddings to a query embedding.
         
         Args:
             query_embedding: Query embedding vector
-            candidate_embeddings: Dictionary of candidate IDs to embeddings
-            top_k: Number of results to return
-            threshold: Minimum similarity threshold
+            embeddings: List of embeddings to compare against
+            min_similarity: Minimum similarity threshold
+            limit: Maximum number of results
             
         Returns:
-            List of matches with IDs and similarity scores
+            List of dictionaries with index and similarity
         """
-        results = []
+        # Convert query to numpy array if needed
+        if isinstance(query_embedding, list):
+            query_embedding = np.array(query_embedding)
         
-        for candidate_id, candidate_embedding in candidate_embeddings.items():
-            similarity = self.cosine_similarity(query_embedding, candidate_embedding)
+        # Calculate similarities
+        similarities = []
+        
+        for i, embedding in enumerate(embeddings):
+            # Convert to numpy array if needed
+            if isinstance(embedding, list):
+                embedding = np.array(embedding)
             
-            if similarity >= threshold:
-                results.append({
-                    "id": candidate_id,
+            # Calculate similarity
+            similarity = self.calculate_similarity(query_embedding, embedding)
+            
+            if similarity >= min_similarity:
+                similarities.append({
+                    "index": i,
                     "similarity": similarity
                 })
         
-        # Sort by similarity score (descending)
-        results.sort(key=lambda x: x["similarity"], reverse=True)
+        # Sort by similarity (descending)
+        similarities.sort(key=lambda x: x["similarity"], reverse=True)
         
-        # Limit to top_k results
-        return results[:top_k]
-    
-    def clear_cache(self) -> None:
-        """Clear the embedding cache."""
-        self.embedding_cache = {}
-        logger.info("Embedding cache cleared")
+        # Limit results
+        return similarities[:limit]
