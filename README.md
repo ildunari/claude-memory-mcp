@@ -2,6 +2,8 @@
 
 An MCP (Model Context Protocol) server implementation that provides persistent memory capabilities for Large Language Models, specifically designed to integrate with the Claude desktop application.
 
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+
 ## Overview
 
 This project implements optimal memory techniques based on comprehensive research of current approaches in the field. It provides a standardized way for Claude to maintain persistent memory across conversations and sessions.
@@ -11,177 +13,112 @@ This project implements optimal memory techniques based on comprehensive researc
 - **Tiered Memory Architecture**: Short-term, long-term, and archival memory tiers
 - **Multiple Memory Types**: Support for conversations, knowledge, entities, and reflections
 - **Semantic Search**: Retrieve memories based on semantic similarity
+- **Automatic Memory Management**: Intelligent memory capture without explicit commands
 - **Memory Consolidation**: Automatic consolidation of short-term memories into long-term memory
 - **Memory Management**: Importance-based memory retention and forgetting
 - **Claude Integration**: Ready-to-use integration with Claude desktop application
 - **MCP Protocol Support**: Compatible with the Model Context Protocol
+- **Docker Support**: Easy deployment using Docker containers
 
-## Architecture
+## Quick Start
 
-The MCP server follows a functional domain-based architecture with the following components:
+### Option 1: Using Docker (Recommended)
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                   Claude Desktop                        │
-└───────────────────────────┬─────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────┐
-│                     MCP Interface                       │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌──────────┐ │
-│  │ Tool Definitions│  │ Request Handler │  │ Security │ │
-│  └─────────────────┘  └─────────────────┘  └──────────┘ │
-└───────────────────────────┬─────────────────────────────┘
-                            │
-┌───────────────────────────▼─────────────────────────────┐
-│                Memory Domain Manager                    │
-├─────────────────┬─────────────────┬────────────────────┤
-│  Episodic Domain│  Semantic Domain│  Temporal Domain   │
-├─────────────────┴─────────────────┴────────────────────┤
-│                  Persistence Domain                    │
-└─────────────────────────────────────────────────────────┘
+```bash
+# Clone the repository
+git clone https://github.com/WhenMoon-afk/claude-memory-mcp.git
+cd claude-memory-mcp
+
+# Start with Docker Compose
+docker-compose up -d
 ```
 
-### Functional Domains
+Configure Claude Desktop to use the containerized MCP server (see [Docker Usage Guide](docs/docker_usage.md) for details).
 
-1. **Episodic Domain**: Manages session-based interactions and contextual memory
-2. **Semantic Domain**: Handles knowledge organization and retrieval
-3. **Temporal Domain**: Controls time-aware processing of memories
-4. **Persistence Domain**: Manages storage optimization and retrieval
+### Option 2: Standard Installation
 
-## Installation
+1. **Prerequisites**:
+   - Python 3.8-3.12
+   - pip package manager
 
-### Prerequisites
-
-- Python 3.8 or higher
-- pip package manager
-
-### Installation Steps
-
-1. Clone the repository:
-   ```
+2. **Installation**:
+   ```bash
+   # Clone the repository
    git clone https://github.com/WhenMoon-afk/claude-memory-mcp.git
    cd claude-memory-mcp
-   ```
-
-2. Install dependencies:
-   ```
-   pip install -e .
-   ```
-
-3. Run the setup script:
-   ```
+   
+   # Install dependencies
+   pip install -r requirements.txt
+   
+   # Run setup script
    chmod +x setup.sh
    ./setup.sh
    ```
 
-## Claude Desktop Integration
+3. **Claude Desktop Integration**:
 
-To integrate with the Claude desktop application, add the following to your Claude configuration file:
+   Add the following to your Claude configuration file:
 
-```json
-{
-  "mcpServers": {
-    "memory": {
-      "command": "python",
-      "args": ["-m", "memory_mcp"],
-      "env": {
-        "MEMORY_FILE_PATH": "/path/to/your/memory.json"
-      }
-    }
-  }
-}
-```
+   ```json
+   {
+     "mcpServers": {
+       "memory": {
+         "command": "python",
+         "args": ["-m", "memory_mcp"],
+         "env": {
+           "MEMORY_FILE_PATH": "/path/to/your/memory.json"
+         }
+       }
+     }
+   }
+   ```
 
-## Memory File Structure
+## Using Memory with Claude
 
-The memory system uses a JSON-based file structure with the following components:
+The Memory MCP Server enables Claude to remember information across conversations without requiring explicit commands. 
 
-```json
-{
-  "metadata": {
-    "version": "1.0",
-    "created_at": "ISO-8601 timestamp",
-    "updated_at": "ISO-8601 timestamp"
-  },
-  "memory_index": {
-    // Vector index for fast semantic search
-  },
-  "short_term_memory": [
-    // Recent and frequently accessed memories
-  ],
-  "long_term_memory": [
-    // Older or less frequently accessed memories
-  ],
-  "archived_memory": [
-    // Rarely accessed but potentially valuable memories
-  ],
-  "memory_schema": {
-    // Schema definitions for memory entries
-  },
-  "config": {
-    // Configuration settings for memory management
-  }
-}
-```
+1. **Automatic Memory**: Claude will automatically:
+   - Remember important details you share
+   - Store user preferences and facts
+   - Recall relevant information when needed
 
-## Usage
+2. **Memory Recall**: To see what Claude remembers, simply ask:
+   - "What do you remember about me?"
+   - "What do you know about my preferences?"
 
-### Starting the Server
+3. **System Prompt**: For optimal memory usage, add this to your Claude system prompt:
 
-```bash
-python -m memory_mcp
-```
+   ```
+   This Claude instance has been enhanced with persistent memory capabilities.
+   Claude will automatically remember important details about you across
+   conversations and recall them when relevant, without needing explicit commands.
+   ```
 
-### Available Tools
+See the [User Guide](docs/user_guide.md) for detailed usage instructions and examples.
 
-- `store_memory`: Store new information in memory
-- `retrieve_memory`: Retrieve relevant memories based on query
-- `list_memories`: List available memories with filtering options
-- `update_memory`: Update existing memory entries
-- `delete_memory`: Remove specific memories
-- `memory_stats`: Get statistics about the memory store
+## Documentation
 
-## Development
+- [User Guide](docs/user_guide.md)
+- [Docker Usage Guide](docs/docker_usage.md)
+- [Compatibility Guide](docs/compatibility.md)
+- [Architecture](docs/architecture.md)
+- [Claude Integration Guide](docs/claude_integration.md)
 
-### Project Structure
+## Examples
 
-```
-memory_mcp/
-├── memory/
-│   ├── models.py         # Memory data models
-│   ├── storage.py        # Memory storage operations
-│   ├── retrieval.py      # Memory retrieval operations
-│   └── consolidation.py  # Memory consolidation operations
-├── domains/
-│   ├── episodic.py       # Episodic memory domain
-│   ├── semantic.py       # Semantic knowledge domain
-│   ├── temporal.py       # Temporal processing domain
-│   └── persistence.py    # Storage and retrieval domain
-├── mcp/
-│   ├── server.py         # MCP server implementation
-│   ├── tools.py          # MCP tool definitions
-│   └── handler.py        # Request handling
-├── security/
-│   └── validation.py     # Input validation
-└── utils/
-    ├── embeddings.py     # Vector embedding utilities
-    └── schema.py         # Schema validation
-```
+The `examples` directory contains scripts demonstrating how to interact with the Memory MCP Server:
 
-### Running Tests
+- `store_memory_example.py`: Example of storing a memory
+- `retrieve_memory_example.py`: Example of retrieving memories
 
-```
-pytest
-```
+## Troubleshooting
 
-## Research Background
+If you encounter issues:
 
-This implementation is based on comprehensive research of current LLM persistent memory techniques:
-
-- **OS-Inspired Memory Management**: Tiered memory architecture similar to MemGPT
-- **Biological-Inspired Episodic Memory**: Context-sensitive memory retrieval
-- **Vector Embeddings**: Semantic search inspired by vector database approaches
-- **Self-Reflection**: Memory consolidation through periodic review
+1. Check the [Compatibility Guide](docs/compatibility.md) for dependency requirements
+2. Ensure your Python version is 3.8-3.12
+3. For NumPy issues, use: `pip install "numpy>=1.20.0,<2.0.0"`
+4. Try using Docker for simplified deployment
 
 ## Contributing
 
@@ -189,9 +126,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgements
-
-- Based on research of optimal memory techniques for LLMs
-- Implements the Model Context Protocol for integration with Claude
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
