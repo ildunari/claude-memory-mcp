@@ -16,15 +16,7 @@ from memory_mcp.mcp.tool_models import (
     StoreMemoryInput, RetrieveMemoryInput, ListMemoriesInput,
     UpdateMemoryInput, DeleteMemoryInput, MemoryStatsInput
 )
-from memory_mcp.mcp.auto_capture_tools import (
-    AutoCaptureControlInput, ContentTypeFilterInput, AutoCaptureStatsInput,
-    create_auto_capture_tools
-)
-from memory_mcp.mcp.conversation_tools import (
-    ProcessMessageInput, create_conversation_tools
-)
 from memory_mcp.domains.manager import MemoryDomainManager
-from memory_mcp.auto_memory import ConversationAnalyzer
 
 
 class MemoryMcpServer:
@@ -46,10 +38,6 @@ class MemoryMcpServer:
         self.domain_manager = MemoryDomainManager(config)
         self.app = FastMCP("memory-mcp-server")
         self.tool_definitions = MemoryToolDefinitions(self.domain_manager)
-        
-        # Initialize conversation analyzer for auto-capture
-        # Temporarily disable auto-capture to isolate the issue
-        self.conversation_analyzer = None
         
         # Register tools
         self._register_tools()
@@ -262,72 +250,6 @@ class MemoryMcpServer:
                     }),
                     "is_error": True
                 }]
-    
-    async def _auto_store_memory(
-        self,
-        memory_type: str,
-        content: Dict[str, Any],
-        importance: float = 0.5,
-        context: Optional[Dict[str, Any]] = None
-    ) -> str:
-        """
-        Callback for auto-capture system to store memories.
-        
-        Args:
-            memory_type: Type of memory
-            content: Memory content
-            importance: Importance score
-            context: Optional context
-            
-        Returns:
-            Memory ID
-        """
-        return await self.domain_manager.store_memory(
-            memory_type=memory_type,
-            content=content,
-            importance=importance,
-            context=context
-        )
-    
-    def _register_auto_capture_tools(self) -> None:
-        """Register auto-capture control tools."""
-        auto_capture_tools = create_auto_capture_tools(self.conversation_analyzer)
-        
-        # Auto-capture control
-        @self.app.tool(
-            name="auto_capture_control",
-            description=auto_capture_tools["auto_capture_control"]["description"]
-        )
-        async def auto_capture_control_handler(arguments: AutoCaptureControlInput):
-            return await auto_capture_tools["auto_capture_control"]["handler"](arguments)
-        
-        # Content type filter
-        @self.app.tool(
-            name="content_type_filter",
-            description=auto_capture_tools["content_type_filter"]["description"]
-        )
-        async def content_type_filter_handler(arguments: ContentTypeFilterInput):
-            return await auto_capture_tools["content_type_filter"]["handler"](arguments)
-        
-        # Auto-capture stats
-        @self.app.tool(
-            name="auto_capture_stats",
-            description=auto_capture_tools["auto_capture_stats"]["description"]
-        )
-        async def auto_capture_stats_handler(arguments: AutoCaptureStatsInput):
-            return await auto_capture_tools["auto_capture_stats"]["handler"](arguments)
-    
-    def _register_conversation_tools(self) -> None:
-        """Register conversation processing tools."""
-        conversation_tools = create_conversation_tools(self.conversation_analyzer)
-        
-        # Process message tool
-        @self.app.tool(
-            name="process_message",
-            description=conversation_tools["process_message"]["description"]
-        )
-        async def process_message_handler(arguments: ProcessMessageInput):
-            return await conversation_tools["process_message"]["handler"](arguments)
     
     def start(self) -> None:
         """Start the MCP server."""

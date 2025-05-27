@@ -13,9 +13,9 @@ This project implements optimal memory techniques based on comprehensive researc
 - **Tiered Memory Architecture**: Short-term, long-term, and archival memory tiers
 - **Multiple Memory Types**: Support for conversations, knowledge, entities, and reflections
 - **Semantic Search**: Retrieve memories based on semantic similarity
-- **Automatic Memory Management**: Intelligent memory capture without explicit commands
+- **Memory Management**: Store and retrieve memories through explicit Claude commands
 - **Memory Consolidation**: Automatic consolidation of short-term memories into long-term memory
-- **Memory Management**: Importance-based memory retention and forgetting
+- **Importance-based Retention**: Smart memory retention and forgetting based on importance
 - **Claude Integration**: Ready-to-use integration with Claude desktop application
 - **MCP Protocol Support**: Compatible with the Model Context Protocol
 - **Docker Support**: Easy deployment using Docker containers
@@ -75,12 +75,12 @@ Configure Claude Desktop to use the containerized MCP server (see [Docker Usage 
 
 ## Using Memory with Claude
 
-The Memory MCP Server enables Claude to remember information across conversations without requiring explicit commands. 
+The Memory MCP Server enables Claude to remember information across conversations through explicit memory management. 
 
-1. **Automatic Memory**: Claude will automatically:
-   - Remember important details you share
-   - Store user preferences and facts
-   - Recall relevant information when needed
+1. **Storing Memories**: Claude can store memories when instructed:
+   - Important facts and information
+   - User preferences and context
+   - Conversations and decisions
 
 2. **Memory Recall**: To see what Claude remembers, simply ask:
    - "What do you remember about me?"
@@ -90,8 +90,8 @@ The Memory MCP Server enables Claude to remember information across conversation
 
    ```
    This Claude instance has been enhanced with persistent memory capabilities.
-   Claude will automatically remember important details about you across
-   conversations and recall them when relevant, without needing explicit commands.
+   Claude can store important information when requested and recall it across
+   conversations. Use the memory tools to explicitly save and retrieve information.
    ```
 
 See the [User Guide](docs/user_guide.md) for detailed usage instructions and examples.
@@ -111,13 +111,13 @@ The `examples` directory contains scripts demonstrating how to interact with the
 - `store_memory_example.py`: Example of storing a memory
 - `retrieve_memory_example.py`: Example of retrieving memories
 
-## Recent Updates (v0.2.1)
+## Recent Updates (v0.2.2)
 
-### 🎉 Major Fixes (2025-05-27)
+### 🎉 Major Updates (2025-05-27)
 - **Fixed Memory Stats**: Domain-specific memory type counts now display correctly
-- **Auto-Capture Working**: Conversation messages are now automatically captured and stored
-- **Enhanced Content Detection**: Improved detection of personal info, preferences, and decisions
-- **New Tool**: Added `process_message` tool for feeding messages into auto-capture system
+- **Architecture Clarification**: Removed auto-capture features that are incompatible with MCP architecture
+- **Improved Stability**: Fixed initialization issues that were causing the tool to hang
+- **Focused on Core Features**: Memory storage and retrieval work reliably through explicit Claude commands
 
 ## Troubleshooting
 
