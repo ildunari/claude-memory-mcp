@@ -1,0 +1,376 @@
+# Kubernetes Deployment for Claude Memory MCP System
+# Production-ready with high availability, scaling, and monitoring
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: memory-mcp
+  labels:
+    name: memory-mcp
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: memory-mcp-config
+  namespace: memory-mcp
+data:
+  config.json: |
+    {
+      "memory": {
+        "backend": "qdrant",
+        "file_path": "/app/data/memories.json",
+        "dir": "/app/data",
+        "short_term_threshold": 0.3,
+        "consolidation_threshold": 100
+      },
+      "qdrant": {
+        "url": "http://qdrant-service:6333",
+        "collection_name": "memories",
+        "dimension": 384,
+        "timeout": 30.0,
+        "prefer_grpc": false
+      },
+      "embedding": {
+        "default_model": "sentence-transformers/all-MiniLM-L6-v2",
+        "model": "sentence-transformers/all-MiniLM-L6-v2",
+        "dimensions": 384,
+        "local": true,
+        "cache_dir": "/app/data/embeddings_cache"
+      },
+      "migration": {
+        "enabled": true,
+        "quality_threshold": 0.75,
+        "rollback_threshold": 0.6,
+        "max_time_hours": 24,
+        "state_file": "/app/data/migration_state.json"
+      },
+      "background": {
+        "max_workers": 4,
+        "max_queue_size": 200
+      },
+      "retrieval": {
+        "hybrid_search": true,
+        "query_expansion": false
+      },
+      "performance": {
+        "enabled": true,
+        "sampling_rate": 1.0,
+        "thresholds": {
+          "latency_p95_ms": 2000,
+          "latency_p99_ms": 5000,
+          "error_rate_percent": 2.0,
+          "cpu_usage_percent": 75.0,
+          "memory_usage_percent": 80.0
+        }
+      },
+      "optimization": {
+        "enabled": true,
+        "auto_apply": false
+      }
+    }
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: memory-mcp-secrets
+  namespace: memory-mcp
+type: Opaque
+data:
+  # Base64 encoded values - update these in production
+  secret-key: bWVtb3J5LW1jcC1zZWNyZXQta2V5LWNoYW5nZS1tZQ==  # memory-mcp-secret-key-change-me
+
+---
+# Qdrant Vector Database Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qdrant
+  namespace: memory-mcp
+  labels:
+    app: qdrant
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qdrant
+  template:
+    metadata:
+      labels:
+        app: qdrant
+    spec:
+      containers:
+      - name: qdrant
+        image: qdrant/qdrant:v1.7.4
+        ports:
+        - containerPort: 6333
+          name: http
+        - containerPort: 6334
+          name: grpc
+        env:
+        - name: QDRANT__SERVICE__HTTP_PORT
+          value: "6333"
+        - name: QDRANT__SERVICE__GRPC_PORT
+          value: "6334"
+        - name: QDRANT__LOG_LEVEL
+          value: "INFO"
+        volumeMounts:
+        - name: qdrant-storage
+          mountPath: /qdrant/storage
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 6333
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 6333
+          initialDelaySeconds: 10
+          periodSeconds: 10
+      volumes:
+      - name: qdrant-storage
+        persistentVolumeClaim:
+          claimName: qdrant-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant-service
+  namespace: memory-mcp
+spec:
+  selector:
+    app: qdrant
+  ports:
+  - name: http
+    port: 6333
+    targetPort: 6333
+  - name: grpc
+    port: 6334
+    targetPort: 6334
+
+---
+# Memory MCP Server Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memory-mcp
+  namespace: memory-mcp
+  labels:
+    app: memory-mcp
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: memory-mcp
+  template:
+    metadata:
+      labels:
+        app: memory-mcp
+    spec:
+      containers:
+      - name: memory-mcp
+        image: memory-mcp:latest  # Update with your actual image
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: MEMORY_MCP_CONFIG
+          value: "/app/config/config.json"
+        - name: MEMORY_MCP_LOG_LEVEL
+          value: "INFO"
+        - name: MEMORY_MCP_INSTANCE_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: QDRANT_URL
+          value: "http://qdrant-service:6333"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+        - name: data-volume
+          mountPath: /app/data
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - /app/healthcheck.py
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - /app/healthcheck.py
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+      volumes:
+      - name: config-volume
+        configMap:
+          name: memory-mcp-config
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: memory-mcp-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memory-mcp-service
+  namespace: memory-mcp
+  labels:
+    app: memory-mcp
+spec:
+  selector:
+    app: memory-mcp
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8000
+  type: ClusterIP
+
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: memory-mcp-hpa
+  namespace: memory-mcp
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: memory-mcp
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+# Persistent Volume Claims
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qdrant-pvc
+  namespace: memory-mcp
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: fast-ssd  # Update with your storage class
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: memory-mcp-pvc
+  namespace: memory-mcp
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: shared-storage  # Update with your storage class
+
+---
+# Network Policy for security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: memory-mcp-network-policy
+  namespace: memory-mcp
+spec:
+  podSelector:
+    matchLabels:
+      app: memory-mcp
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: nginx-ingress
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: qdrant
+    ports:
+    - protocol: TCP
+      port: 6333
+    - protocol: TCP
+      port: 6334
+  - to: []  # Allow all outbound for embedding model downloads
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+
+---
+# Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: memory-mcp-pdb
+  namespace: memory-mcp
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: memory-mcp
+
+---
+# Service Monitor for Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: memory-mcp-metrics
+  namespace: memory-mcp
+  labels:
+    app: memory-mcp
+spec:
+  selector:
+    matchLabels:
+      app: memory-mcp
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s

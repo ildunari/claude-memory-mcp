@@ -1,0 +1,312 @@
+# Default values for memory-mcp Helm chart
+# This is a YAML-formatted file.
+
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+# Memory MCP Application Configuration
+memoryMcp:
+  # Container image configuration
+  image:
+    repository: memory-mcp
+    tag: latest
+    pullPolicy: IfNotPresent
+  
+  # Deployment configuration
+  replicaCount: 3
+  
+  # Resource requirements
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+  
+  # Auto-scaling configuration
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  
+  # Pod configuration
+  podAnnotations: {}
+  podSecurityContext:
+    fsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+  
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 1000
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8000
+    annotations: {}
+  
+  # Ingress configuration
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+      # kubernetes.io/ingress.class: nginx
+      # kubernetes.io/tls-acme: "true"
+    hosts:
+    - host: memory-mcp.local
+      paths:
+      - path: /
+        pathType: Prefix
+    tls: []
+    #  - secretName: memory-mcp-tls
+    #    hosts:
+    #      - memory-mcp.local
+  
+  # Health checks
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+    successThreshold: 1
+  
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+  
+  # Node assignment
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  
+  # Persistent storage
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteMany
+    size: 10Gi
+    annotations: {}
+
+# Qdrant Vector Database Configuration
+qdrant:
+  enabled: true
+  
+  # Container image
+  image:
+    repository: qdrant/qdrant
+    tag: v1.7.4
+    pullPolicy: IfNotPresent
+  
+  # Resource requirements
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+  
+  # Service configuration
+  service:
+    type: ClusterIP
+    httpPort: 6333
+    grpcPort: 6334
+  
+  # Persistent storage
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessMode: ReadWriteOnce
+    size: 20Gi
+  
+  # Configuration
+  config:
+    log_level: INFO
+
+# Memory MCP Configuration
+config:
+  memory:
+    backend: qdrant
+    short_term_threshold: 0.3
+    consolidation_threshold: 100
+  
+  embedding:
+    default_model: "sentence-transformers/all-MiniLM-L6-v2"
+    model: "sentence-transformers/all-MiniLM-L6-v2"
+    dimensions: 384
+    local: true
+  
+  migration:
+    enabled: true
+    quality_threshold: 0.75
+    rollback_threshold: 0.6
+    max_time_hours: 24
+  
+  background:
+    max_workers: 4
+    max_queue_size: 200
+  
+  retrieval:
+    hybrid_search: true
+    query_expansion: false
+  
+  performance:
+    enabled: true
+    sampling_rate: 1.0
+    thresholds:
+      latency_p95_ms: 2000
+      latency_p99_ms: 5000
+      error_rate_percent: 2.0
+      cpu_usage_percent: 75.0
+      memory_usage_percent: 80.0
+  
+  optimization:
+    enabled: true
+    auto_apply: false
+
+# Monitoring Configuration
+monitoring:
+  # Prometheus monitoring
+  prometheus:
+    enabled: false
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+      path: /metrics
+      labels: {}
+  
+  # Grafana dashboards
+  grafana:
+    enabled: false
+    dashboards:
+      enabled: true
+      folder: "Memory MCP"
+  
+  # Logging
+  logging:
+    level: INFO
+    format: json
+
+# Security Configuration
+security:
+  # Network policies
+  networkPolicy:
+    enabled: true
+    ingress:
+      enabled: true
+      from:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: nginx-ingress
+    egress:
+      enabled: true
+      to:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: qdrant
+      - namespaceSelector: {}
+        ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+  
+  # Pod security standards
+  podSecurityStandards:
+    enforce: "restricted"
+    audit: "restricted"
+    warn: "restricted"
+
+# External Dependencies
+external:
+  # Redis for caching (optional)
+  redis:
+    enabled: false
+    host: ""
+    port: 6379
+    password: ""
+  
+  # External Qdrant instance
+  externalQdrant:
+    enabled: false
+    host: ""
+    port: 6333
+    grpcPort: 6334
+
+# Environment-specific overrides
+environments:
+  development:
+    memoryMcp:
+      replicaCount: 1
+      resources:
+        requests:
+          memory: "512Mi"
+          cpu: "250m"
+        limits:
+          memory: "1Gi"
+          cpu: "500m"
+    qdrant:
+      persistence:
+        size: 5Gi
+    monitoring:
+      prometheus:
+        enabled: true
+      grafana:
+        enabled: true
+  
+  staging:
+    memoryMcp:
+      replicaCount: 2
+      resources:
+        requests:
+          memory: "1Gi"
+          cpu: "500m"
+        limits:
+          memory: "2Gi"
+          cpu: "1000m"
+    qdrant:
+      persistence:
+        size: 10Gi
+  
+  production:
+    memoryMcp:
+      replicaCount: 3
+      autoscaling:
+        enabled: true
+      podDisruptionBudget:
+        enabled: true
+        minAvailable: 2
+    qdrant:
+      persistence:
+        size: 50Gi
+    security:
+      networkPolicy:
+        enabled: true
+    monitoring:
+      prometheus:
+        enabled: true
+      grafana:
+        enabled: true

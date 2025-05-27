@@ -1,0 +1,53 @@
+{
+  "memory": {
+    "backend": "qdrant",
+    "file_path": "~/.memory_mcp/memories.json",
+    "dir": "~/.memory_mcp",
+    "short_term_threshold": 0.3,
+    "consolidation_threshold": 100
+  },
+  "qdrant": {
+    "url": "http://localhost:6333",
+    "collection_name": "memories",
+    "dimension": 384,
+    "timeout": 30.0,
+    "prefer_grpc": false
+  },
+  "embedding": {
+    "default_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "model": "sentence-transformers/all-MiniLM-L6-v2",
+    "dimensions": 384,
+    "local": true,
+    "cache_dir": "~/.memory_mcp/embeddings_cache"
+  },
+  "migration": {
+    "enabled": true,
+    "quality_threshold": 0.75,
+    "rollback_threshold": 0.6,
+    "max_time_hours": 24,
+    "state_file": "~/.memory_mcp/migration_state.json"
+  },
+  "background": {
+    "max_workers": 2,
+    "max_queue_size": 100
+  },
+  "retrieval": {
+    "hybrid_search": true,
+    "query_expansion": false
+  },
+  "performance": {
+    "enabled": true,
+    "sampling_rate": 1.0,
+    "thresholds": {
+      "latency_p95_ms": 3000,
+      "latency_p99_ms": 8000,
+      "error_rate_percent": 3.0,
+      "cpu_usage_percent": 80.0,
+      "memory_usage_percent": 85.0
+    }
+  },
+  "optimization": {
+    "enabled": true,
+    "auto_apply": false
+  }
+}

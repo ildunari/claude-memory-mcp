@@ -543,6 +543,24 @@ class PersistenceDomain:
         long_term_count = len(self.memory_data.get("long_term_memory", []))
         archived_count = len(self.memory_data.get("archived_memory", []))
         
+        # Count memories by type across all tiers
+        type_counts = {
+            "conversation": 0,
+            "fact": 0,
+            "document": 0,
+            "entity": 0,
+            "reflection": 0,
+            "code": 0
+        }
+        
+        # Iterate through all tiers to count types
+        for tier in ["short_term_memory", "long_term_memory", "archived_memory"]:
+            memories = self.memory_data.get(tier, [])
+            for memory in memories:
+                memory_type = memory.get("type", "unknown")
+                if memory_type in type_counts:
+                    type_counts[memory_type] += 1
+        
         # Update stats
         stats = self.memory_data["metadata"]["memory_stats"]
         stats["total_memories"] = short_term_count + long_term_count + archived_count
@@ -550,6 +568,9 @@ class PersistenceDomain:
         stats["archived_memories"] = archived_count
         stats["short_term_count"] = short_term_count
         stats["long_term_count"] = long_term_count
+        
+        # Add type counts to stats
+        stats.update(type_counts)
     
     async def _update_memory_index(self, memory: Dict[str, Any], tier: str) -> None:
         """

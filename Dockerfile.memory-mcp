@@ -1,0 +1,117 @@
+# Multi-stage Dockerfile for Claude Memory MCP Server
+# Optimized for production deployment with minimal attack surface
+
+# Stage 1: Build dependencies and install packages
+FROM python:3.11-slim as builder
+
+# Set build environment
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt requirements-qdrant.txt ./
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt && \
+    pip install -r requirements-qdrant.txt
+
+# Copy source code and install the package
+COPY . /app
+WORKDIR /app
+RUN pip install -e .
+
+# Stage 2: Runtime image
+FROM python:3.11-slim as runtime
+
+# Set runtime environment
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    MEMORY_MCP_CONFIG="/app/config/config.json" \
+    MEMORY_MCP_LOG_LEVEL="INFO"
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r memoryuser \
+    && useradd -r -g memoryuser memoryuser
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Copy application code
+COPY --from=builder /app /app
+WORKDIR /app
+
+# Create necessary directories
+RUN mkdir -p /app/config /app/data /app/logs && \
+    chown -R memoryuser:memoryuser /app
+
+# Copy configuration templates
+COPY config_migration_enabled.json /app/config/config.production.json
+COPY config.qdrant.json /app/config/config.qdrant.json
+
+# Health check script
+COPY <<EOF /app/healthcheck.py
+#!/usr/bin/env python3
+import sys
+import asyncio
+import json
+from pathlib import Path
+
+async def health_check():
+    try:
+        # Import the manager
+        sys.path.append('/app')
+        from memory_mcp.domains.manager import MemoryDomainManager
+        from memory_mcp.utils.config import load_config
+        
+        # Load config
+        config_path = "/app/config/config.json"
+        if not Path(config_path).exists():
+            config_path = "/app/config/config.production.json"
+            
+        config = load_config(config_path)
+        
+        # Quick health check - just validate config and basic imports
+        manager = MemoryDomainManager(config)
+        
+        print("Health check passed")
+        return True
+        
+    except Exception as e:
+        print(f"Health check failed: {e}")
+        return False
+
+if __name__ == "__main__":
+    success = asyncio.run(health_check())
+    sys.exit(0 if success else 1)
+EOF
+
+RUN chmod +x /app/healthcheck.py
+
+# Switch to non-root user
+USER memoryuser
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python /app/healthcheck.py
+
+# Default command
+CMD ["python", "-m", "memory_mcp", "--config", "/app/config/config.json"]

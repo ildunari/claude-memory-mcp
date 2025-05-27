@@ -2,16 +2,26 @@
 MCP server implementation for the memory system.
 """
 
+import asyncio
 import json
 import sys
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
-from mcp.server import Server
+from mcp.server.fastmcp import FastMCP
 from mcp.server.stdio import stdio_server
 
 from memory_mcp.mcp.tools import MemoryToolDefinitions
+from memory_mcp.mcp.tool_models import (
+    StoreMemoryInput, RetrieveMemoryInput, ListMemoriesInput,
+    UpdateMemoryInput, DeleteMemoryInput, MemoryStatsInput
+)
+from memory_mcp.mcp.auto_capture_tools import (
+    AutoCaptureControlInput, ContentTypeFilterInput, AutoCaptureStatsInput,
+    create_auto_capture_tools
+)
 from memory_mcp.domains.manager import MemoryDomainManager
+from memory_mcp.auto_memory import ConversationAnalyzer
 
 
 class MemoryMcpServer:
@@ -31,11 +41,19 @@ class MemoryMcpServer:
         """
         self.config = config
         self.domain_manager = MemoryDomainManager(config)
-        self.app = Server("memory-mcp-server")
+        self.app = FastMCP("memory-mcp-server")
         self.tool_definitions = MemoryToolDefinitions(self.domain_manager)
+        
+        # Initialize conversation analyzer for auto-capture
+        auto_capture_config = config.get("auto_capture", {})
+        self.conversation_analyzer = ConversationAnalyzer(
+            memory_store_callback=self._auto_store_memory,
+            config=auto_capture_config
+        )
         
         # Register tools
         self._register_tools()
+        self._register_auto_capture_tools()
     
     def _register_tools(self) -> None:
         """Register memory-related tools with the MCP server."""
@@ -43,18 +61,17 @@ class MemoryMcpServer:
         # Store memory
         @self.app.tool(
             name="store_memory",
-            description="Store new information in memory",
-            schema=self.tool_definitions.store_memory_schema
+            description="Store new information in memory"
         )
-        async def store_memory_handler(arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
+        async def store_memory_handler(arguments: StoreMemoryInput) -> List[Dict[str, Any]]:
             """Handle store_memory tool requests."""
             try:
                 memory_id = await self.domain_manager.store_memory(
-                    memory_type=arguments["type"],
-                    content=arguments["content"],
-                    importance=arguments.get("importance", 0.5),
-                    metadata=arguments.get("metadata", {}),
-                    context=arguments.get("context", {})
+                    memory_type=arguments.type,
+                    content=arguments.content,
+                    importance=arguments.importance,
+                    metadata=arguments.metadata,
+                    context=arguments.context
                 )
                 
                 return [{
@@ -78,17 +95,16 @@ class MemoryMcpServer:
         # Retrieve memory
         @self.app.tool(
             name="retrieve_memory",
-            description="Retrieve relevant memories based on query",
-            schema=self.tool_definitions.retrieve_memory_schema
+            description="Retrieve relevant memories based on query"
         )
-        async def retrieve_memory_handler(arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
+        async def retrieve_memory_handler(arguments: RetrieveMemoryInput) -> List[Dict[str, Any]]:
             """Handle retrieve_memory tool requests."""
             try:
-                query = arguments["query"]
-                limit = arguments.get("limit", 5)
-                memory_types = arguments.get("types", None)
-                min_similarity = arguments.get("min_similarity", 0.6)
-                include_metadata = arguments.get("include_metadata", False)
+                query = arguments.query
+                limit = arguments.limit
+                memory_types = arguments.types
+                min_similarity = arguments.min_similarity
+                include_metadata = arguments.include_metadata
                 
                 memories = await self.domain_manager.retrieve_memories(
                     query=query,
@@ -119,17 +135,16 @@ class MemoryMcpServer:
         # List memories
         @self.app.tool(
             name="list_memories",
-            description="List available memories with filtering options",
-            schema=self.tool_definitions.list_memories_schema
+            description="List available memories with filtering options"
         )
-        async def list_memories_handler(arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
+        async def list_memories_handler(arguments: ListMemoriesInput) -> List[Dict[str, Any]]:
             """Handle list_memories tool requests."""
             try:
-                memory_types = arguments.get("types", None)
-                limit = arguments.get("limit", 20)
-                offset = arguments.get("offset", 0)
-                tier = arguments.get("tier", None)
-                include_content = arguments.get("include_content", False)
+                memory_types = arguments.types
+                limit = arguments.limit
+                offset = 0  # Not in the input model, using default
+                tier = None  # Not in the input model, using default
+                include_content = False  # Not in the input model, using default
                 
                 memories = await self.domain_manager.list_memories(
                     memory_types=memory_types,
@@ -160,14 +175,13 @@ class MemoryMcpServer:
         # Update memory
         @self.app.tool(
             name="update_memory",
-            description="Update existing memory entries",
-            schema=self.tool_definitions.update_memory_schema
+            description="Update existing memory entries"
         )
-        async def update_memory_handler(arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
+        async def update_memory_handler(arguments: UpdateMemoryInput) -> List[Dict[str, Any]]:
             """Handle update_memory tool requests."""
             try:
-                memory_id = arguments["memory_id"]
-                updates = arguments["updates"]
+                memory_id = arguments.memory_id
+                updates = arguments.updates
                 
                 success = await self.domain_manager.update_memory(
                     memory_id=memory_id,
@@ -194,13 +208,12 @@ class MemoryMcpServer:
         # Delete memory
         @self.app.tool(
             name="delete_memory",
-            description="Remove specific memories",
-            schema=self.tool_definitions.delete_memory_schema
+            description="Remove specific memories"
         )
-        async def delete_memory_handler(arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
+        async def delete_memory_handler(arguments: DeleteMemoryInput) -> List[Dict[str, Any]]:
             """Handle delete_memory tool requests."""
             try:
-                memory_ids = arguments["memory_ids"]
+                memory_ids = arguments.memory_ids
                 
                 success = await self.domain_manager.delete_memories(
                     memory_ids=memory_ids
@@ -226,10 +239,9 @@ class MemoryMcpServer:
         # Memory stats
         @self.app.tool(
             name="memory_stats",
-            description="Get statistics about the memory store",
-            schema=self.tool_definitions.memory_stats_schema
+            description="Get statistics about the memory store"
         )
-        async def memory_stats_handler(arguments: Dict[str, Any]) -> List[Dict[str, Any]]:
+        async def memory_stats_handler(arguments: MemoryStatsInput) -> List[Dict[str, Any]]:
             """Handle memory_stats tool requests."""
             try:
                 stats = await self.domain_manager.get_memory_stats()
@@ -252,17 +264,66 @@ class MemoryMcpServer:
                     "is_error": True
                 }]
     
-    async def start(self) -> None:
+    async def _auto_store_memory(
+        self,
+        memory_type: str,
+        content: Dict[str, Any],
+        importance: float = 0.5,
+        context: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Callback for auto-capture system to store memories.
+        
+        Args:
+            memory_type: Type of memory
+            content: Memory content
+            importance: Importance score
+            context: Optional context
+            
+        Returns:
+            Memory ID
+        """
+        return await self.domain_manager.store_memory(
+            memory_type=memory_type,
+            content=content,
+            importance=importance,
+            context=context
+        )
+    
+    def _register_auto_capture_tools(self) -> None:
+        """Register auto-capture control tools."""
+        auto_capture_tools = create_auto_capture_tools(self.conversation_analyzer)
+        
+        # Auto-capture control
+        @self.app.tool(
+            name="auto_capture_control",
+            description=auto_capture_tools["auto_capture_control"]["description"]
+        )
+        async def auto_capture_control_handler(arguments: AutoCaptureControlInput):
+            return await auto_capture_tools["auto_capture_control"]["handler"](arguments)
+        
+        # Content type filter
+        @self.app.tool(
+            name="content_type_filter",
+            description=auto_capture_tools["content_type_filter"]["description"]
+        )
+        async def content_type_filter_handler(arguments: ContentTypeFilterInput):
+            return await auto_capture_tools["content_type_filter"]["handler"](arguments)
+        
+        # Auto-capture stats
+        @self.app.tool(
+            name="auto_capture_stats",
+            description=auto_capture_tools["auto_capture_stats"]["description"]
+        )
+        async def auto_capture_stats_handler(arguments: AutoCaptureStatsInput):
+            return await auto_capture_tools["auto_capture_stats"]["handler"](arguments)
+    
+    def start(self) -> None:
         """Start the MCP server."""
         # Initialize the memory domain manager
-        await self.domain_manager.initialize()
+        asyncio.run(self.domain_manager.initialize())
         
         logger.info("Starting Memory MCP Server using stdio transport")
         
         # Start the server using stdio transport
-        async with stdio_server() as streams:
-            await self.app.run(
-                streams[0],
-                streams[1],
-                self.app.create_initialization_options()
-            )
+        self.app.run(transport='stdio')

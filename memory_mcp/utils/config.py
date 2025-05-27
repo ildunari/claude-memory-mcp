@@ -87,6 +87,22 @@ def create_default_config(config_path: str) -> Dict[str, Any]:
             "semantic_threshold": 0.75,
             "recency_weight": 0.3,
             "importance_weight": 0.7
+        },
+        "auto_capture": {
+            "enabled": True,
+            "min_confidence": 0.6,
+            "context_window_size": 10,
+            "dedup_window_size": 50,
+            "capture_cooldown_minutes": 5,
+            "content_type_filters": {
+                "personal_info": True,
+                "preference": True,
+                "decision": True,
+                "learning": True,
+                "fact": True,
+                "context": True,
+                "reflection": True
+            }
         }
     }
     
@@ -138,6 +154,22 @@ def validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
             "semantic_threshold": 0.75,
             "recency_weight": 0.3,
             "importance_weight": 0.7
+        },
+        "auto_capture": {
+            "enabled": True,
+            "min_confidence": 0.6,
+            "context_window_size": 10,
+            "dedup_window_size": 50,
+            "capture_cooldown_minutes": 5,
+            "content_type_filters": {
+                "personal_info": True,
+                "preference": True,
+                "decision": True,
+                "learning": True,
+                "fact": True,
+                "context": True,
+                "reflection": True
+            }
         }
     }
     

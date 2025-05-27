@@ -5,6 +5,7 @@ Command-line entry point for the Memory MCP Server
 import os
 import logging
 import argparse
+import asyncio
 from pathlib import Path
 
 from loguru import logger
