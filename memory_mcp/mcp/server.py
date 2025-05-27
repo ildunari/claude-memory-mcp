@@ -48,16 +48,11 @@ class MemoryMcpServer:
         self.tool_definitions = MemoryToolDefinitions(self.domain_manager)
         
         # Initialize conversation analyzer for auto-capture
-        auto_capture_config = config.get("auto_capture", {})
-        self.conversation_analyzer = ConversationAnalyzer(
-            memory_store_callback=self._auto_store_memory,
-            config=auto_capture_config
-        )
+        # Temporarily disable auto-capture to isolate the issue
+        self.conversation_analyzer = None
         
         # Register tools
         self._register_tools()
-        self._register_auto_capture_tools()
-        self._register_conversation_tools()
     
     def _register_tools(self) -> None:
         """Register memory-related tools with the MCP server."""
