@@ -111,6 +111,14 @@ The `examples` directory contains scripts demonstrating how to interact with the
 - `store_memory_example.py`: Example of storing a memory
 - `retrieve_memory_example.py`: Example of retrieving memories
 
+## Recent Updates (v0.2.1)
+
+### 🎉 Major Fixes (2025-05-27)
+- **Fixed Memory Stats**: Domain-specific memory type counts now display correctly
+- **Auto-Capture Working**: Conversation messages are now automatically captured and stored
+- **Enhanced Content Detection**: Improved detection of personal info, preferences, and decisions
+- **New Tool**: Added `process_message` tool for feeding messages into auto-capture system
+
 ## Troubleshooting
 
 If you encounter issues:

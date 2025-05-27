@@ -145,11 +145,31 @@ class SemanticDomain:
         Returns:
             Semantic domain statistics
         """
+        # Count memories by type in this domain
+        fact_count = 0
+        document_count = 0
+        entity_count = 0
+        
+        # Use list_memories to get all memories and count by type
+        all_memories = await self.persistence_domain.list_memories(
+            types=["fact", "document", "entity"],
+            limit=1000  # Get all relevant memories
+        )
+        
+        for memory in all_memories:
+            memory_type = memory.get("type")
+            if memory_type == "fact":
+                fact_count += 1
+            elif memory_type == "document":
+                document_count += 1
+            elif memory_type == "entity":
+                entity_count += 1
+        
         return {
             "memory_types": {
-                "fact": 0,
-                "document": 0,
-                "entity": 0
+                "fact": fact_count,
+                "document": document_count,
+                "entity": entity_count
             },
             "status": "initialized"
         }

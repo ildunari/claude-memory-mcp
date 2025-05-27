@@ -20,6 +20,9 @@ from memory_mcp.mcp.auto_capture_tools import (
     AutoCaptureControlInput, ContentTypeFilterInput, AutoCaptureStatsInput,
     create_auto_capture_tools
 )
+from memory_mcp.mcp.conversation_tools import (
+    ProcessMessageInput, create_conversation_tools
+)
 from memory_mcp.domains.manager import MemoryDomainManager
 from memory_mcp.auto_memory import ConversationAnalyzer
 
@@ -54,6 +57,7 @@ class MemoryMcpServer:
         # Register tools
         self._register_tools()
         self._register_auto_capture_tools()
+        self._register_conversation_tools()
     
     def _register_tools(self) -> None:
         """Register memory-related tools with the MCP server."""
@@ -317,6 +321,18 @@ class MemoryMcpServer:
         )
         async def auto_capture_stats_handler(arguments: AutoCaptureStatsInput):
             return await auto_capture_tools["auto_capture_stats"]["handler"](arguments)
+    
+    def _register_conversation_tools(self) -> None:
+        """Register conversation processing tools."""
+        conversation_tools = create_conversation_tools(self.conversation_analyzer)
+        
+        # Process message tool
+        @self.app.tool(
+            name="process_message",
+            description=conversation_tools["process_message"]["description"]
+        )
+        async def process_message_handler(arguments: ProcessMessageInput):
+            return await conversation_tools["process_message"]["handler"](arguments)
     
     def start(self) -> None:
         """Start the MCP server."""

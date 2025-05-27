@@ -105,10 +105,26 @@ class EpisodicDomain:
         Returns:
             Episodic domain statistics
         """
+        # Count memories by type in this domain
+        conversation_count = 0
+        reflection_count = 0
+        
+        # Use list_memories to get all memories and count by type
+        all_memories = await self.persistence_domain.list_memories(
+            types=["conversation", "reflection"],
+            limit=1000  # Get all relevant memories
+        )
+        
+        for memory in all_memories:
+            if memory.get("type") == "conversation":
+                conversation_count += 1
+            elif memory.get("type") == "reflection":
+                reflection_count += 1
+        
         return {
             "memory_types": {
-                "conversation": 0,
-                "reflection": 0
+                "conversation": conversation_count,
+                "reflection": reflection_count
             },
             "status": "initialized"
         }
